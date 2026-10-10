@@ -334,11 +334,12 @@ details.props[open] summary::after{content:"－"}
 .order-api-price,.order-summary-price,.order-summary-note{display:none!important}
 
 /* 이용 순서 / 주의사항 */
-.steps{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;max-width:900px;margin:0 auto}
-.step{display:flex;gap:18px;padding:22px;border-radius:var(--r);background:var(--card);border:1px solid var(--line)}
-.step-num{font-family:'Jalnan2';font-size:30px;color:var(--brand);line-height:1}
-.step-title{font-weight:600;font-size:17px}
-.step-desc{color:var(--soft);font-size:14px;margin-top:4px}
+.steps{display:grid;grid-template-columns:1fr;gap:14px;max-width:1040px;margin:0 auto}
+.step{display:grid;grid-template-columns:76px 1fr;align-items:center;column-gap:26px;padding:26px 34px;border-radius:var(--r);background:var(--card);border:1px solid var(--line);transition:.25s}
+.step:hover{border-color:rgba(196,168,255,.45)}
+.step-num{font-family:'Jalnan2';font-size:34px;color:var(--brand);line-height:1;text-align:left;font-variant-numeric:tabular-nums;letter-spacing:0}
+.step-title{font-size:19px;line-height:1.3}
+.step-desc{color:var(--soft);font-size:14px;margin-top:6px}
 .info-list{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;max-width:960px;margin:30px auto 0}
 .info-item{padding:22px 24px;border-radius:var(--r);background:var(--card);border:1px solid var(--line)}
 .info-item-head{font-weight:600;margin-bottom:6px;color:var(--brand2)}
@@ -364,7 +365,8 @@ footer{padding:30px 0;border-top:1px solid var(--line);color:var(--dim);font-siz
   .tb-sep{display:none}
   .links{grid-template-columns:1fr}
   .intro-profile{flex-direction:column;text-align:center;gap:14px}
-  .steps,.info-list{grid-template-columns:1fr}
+  .info-list{grid-template-columns:1fr}
+  .step{grid-template-columns:56px 1fr;column-gap:16px;padding:20px 18px}.step-num{font-size:26px}
   .hero .wrap{grid-template-columns:1fr}.hero-visual{margin:10px auto 0;max-width:300px}.stats{gap:28px}
   .order-wrap{padding:30px 18px;border-radius:20px}
 }
@@ -1838,18 +1840,37 @@ footer{padding:30px 0;border-top:1px solid var(--line);color:var(--dim);font-siz
   $('#yr').textContent = new Date().getFullYear();
 
   /* ── 영상: 화면에 보일 때만 로드/재생 ── */
-  var activeVids = [], MAX_PLAYING = 4;
+  /* 화면에 보이는 영상 중 중앙에 가까운 것부터 최대 MAX_PLAYING개만 재생 (나머지는 가장자리에 걸친 영상) */
+  var visibleVids = [], MAX_PLAYING = 6, timerId = 0;
+  function rebalance() {
+    timerId = 0;
+    if (lbOpen) return;
+    var mid = innerHeight / 2;
+    var ranked = visibleVids.map(function (v) {
+      var r = v.getBoundingClientRect();
+      return { v: v, d: Math.abs((r.top + r.bottom) / 2 - mid) };
+    }).sort(function (a, b) { return a.d - b.d; });
+    ranked.forEach(function (x, i) {
+      if (i < MAX_PLAYING) { if (x.v.paused) x.v.play().catch(function () {}); }
+      else if (!x.v.paused) x.v.pause();
+    });
+  }
+  function schedule() { if (!timerId) timerId = setTimeout(rebalance, 60); }
   var io = new IntersectionObserver(function (es) {
     es.forEach(function (e) {
       var v = e.target;
-      if (e.isIntersecting && !lbOpen) {
+      if (e.isIntersecting) {
         if (!v.src && v.dataset.src) v.src = v.dataset.src;
-        v.play().catch(function () {});
-        activeVids = activeVids.filter(function (x) { return x !== v; }); activeVids.push(v);
-        while (activeVids.length > MAX_PLAYING) activeVids.shift().pause();
-      } else { v.pause(); activeVids = activeVids.filter(function (x) { return x !== v; }); }
+        if (visibleVids.indexOf(v) < 0) visibleVids.push(v);
+      } else {
+        v.pause();
+        visibleVids = visibleVids.filter(function (x) { return x !== v; });
+      }
     });
+    schedule();
   }, { rootMargin: '150px', threshold: .12 });
+  addEventListener('scroll', schedule, { passive: true });
+  window.__vv = function () { return { n: visibleVids.length, lb: lbOpen, t: timerId }; };
   function watch(root) { $$('video', root).forEach(function (v) { io.observe(v); }); }
 
   /* 영상 파일을 못 불러오면 빈 화면 대신 안내 문구 */
@@ -2071,7 +2092,7 @@ footer{padding:30px 0;border-top:1px solid var(--line);color:var(--dim);font-siz
   function openLb(html) { lbOpen = true; $$('video').forEach(function (v) { v.pause(); }); $('#lbm').innerHTML = html; $('#lb').classList.add('open'); document.body.style.overflow = 'hidden'; }
   function closeLb() {
     $('#lb').classList.remove('open'); $('#lbm').innerHTML = ''; document.body.style.overflow = '';
-    lbOpen = false; activeVids = [];
+    lbOpen = false;
     /* 닫으면 화면에 보이는 영상만 다시 재생 */
     $$('video').forEach(function (v) { if (v.autoplay) v.play().catch(function () {}); else { io.unobserve(v); io.observe(v); } });
   }
